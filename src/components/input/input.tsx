@@ -1,10 +1,20 @@
 import Link from 'next/link';
 import { useState, useEffect, useRef, useId } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import * as emoji from 'node-emoji';
 import cn from 'clsx';
 import { toast } from 'react-hot-toast';
-import { addDoc, getDoc, serverTimestamp } from 'firebase/firestore';
-import { tweetsCollection } from '@lib/firebase/collections';
+import {
+  addDoc,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  serverTimestamp,
+  updateDoc,
+  where
+} from 'firebase/firestore';
+import { trendsCollection, tweetsCollection } from '@lib/firebase/collections';
 import {
   manageReply,
   uploadImages,
@@ -18,6 +28,7 @@ import { UserAvatar } from '@components/user/user-avatar';
 import { InputForm, fromTop } from './input-form';
 import { ImagePreview } from './image-preview';
 import { InputOptions } from './input-options';
+import type { Trend } from '@lib/types/trend';
 import type { ReactNode, FormEvent, ChangeEvent, ClipboardEvent } from 'react';
 import type { WithFieldValue } from 'firebase/firestore';
 import type { Variants } from 'framer-motion';
@@ -73,55 +84,111 @@ export function Input({
   );
 
   const sendTweet = async (): Promise<void> => {
-    inputRef.current?.blur();
+    try {
+      inputRef.current?.blur();
+      const trendRegex = /#\w+/g;
 
-    setLoading(true);
+      setLoading(true);
 
-    const isReplying = reply ?? replyModal;
+      const isReplying = reply ?? replyModal;
 
-    const userId = user?.id as string;
+      const userId = user?.id as string;
 
-    const tweetData: WithFieldValue<Omit<Tweet, 'id'>> = {
-      text: inputValue.trim() || null,
-      parent: isReplying && parent ? parent : null,
-      images: await uploadImages(userId, selectedImages),
-      userLikes: [],
-      createdBy: userId,
-      createdAt: serverTimestamp(),
-      updatedAt: null,
-      userReplies: 0,
-      userRetweets: []
-    };
+      const tweetData: WithFieldValue<Omit<Tweet, 'id'>> = {
+        text: emoji.emojify(inputValue.trim()) || null,
+        parent: isReplying && parent ? parent : null,
+        images: await uploadImages(userId, selectedImages),
+        userLikes: [],
+        createdBy: userId,
+        createdAt: serverTimestamp(),
+        updatedAt: null,
+        userReplies: 0,
+        userRetweets: []
+      };
 
-    await sleep(500);
+      await sleep(500);
 
-    const [tweetRef] = await Promise.all([
-      addDoc(tweetsCollection, tweetData),
-      manageTotalTweets('increment', userId),
-      tweetData.images && manageTotalPhotos('increment', userId),
-      isReplying && manageReply('increment', parent?.id as string)
-    ]);
+      const trends = tweetData?.text?.toString().match(trendRegex);
+      const trendsQueries = trends?.map((trend) =>
+        query(trendsCollection, where('text', '==', trend))
+      );
 
-    const { id: tweetId } = await getDoc(tweetRef);
+      const trendsUpdated =
+        trendsQueries &&
+        (await Promise.all(
+          trendsQueries?.map(async (trendQuery) => {
+            const querySnapshot = await getDocs(trendQuery);
+            const docToUpdate = querySnapshot.docs[0];
+            if (docToUpdate) {
+              const trendRef = doc(trendsCollection, docToUpdate.id);
 
-    if (!modal && !replyModal) {
-      discardTweet();
-      setLoading(false);
+              await updateDoc(trendRef, {
+                updatedAt: new Date(),
+                counter: (docToUpdate.data().counter || 0) + 1
+              });
+
+              return docToUpdate.data();
+            }
+          })
+        ));
+
+      const trendsToCreate =
+        trends?.filter(
+          (trend) => !trendsUpdated?.find((nTrend) => nTrend?.text === trend)
+        ) ?? [];
+
+      await Promise.all(
+        trendsToCreate.map(
+          async (trend) =>
+            await addDoc(trendsCollection, {
+              text: trend,
+              parent: isReplying && parent ? parent : null,
+              createdBy: userId,
+              createdAt: serverTimestamp(),
+              updatedAt: null,
+              counter: 0
+            } as WithFieldValue<Omit<Trend, 'id'>>)
+        )
+      );
+
+      const [tweetRef] = await Promise.all([
+        addDoc(tweetsCollection, tweetData),
+        manageTotalTweets('increment', userId),
+        tweetData.images && manageTotalPhotos('increment', userId),
+        isReplying && manageReply('increment', parent?.id as string)
+      ]);
+
+      const { id: tweetId } = await getDoc(tweetRef);
+
+      if (!modal && !replyModal) {
+        discardTweet();
+        setLoading(false);
+      }
+
+      if (closeModal) closeModal();
+
+      toast.success(
+        () => (
+          <span className='flex gap-2'>
+            Your Tweet was sent
+            <Link
+              href={`/${username}/${tweetId}`}
+              className='custom-underline font-bold'
+            >
+              View
+            </Link>
+          </span>
+        ),
+        { duration: 6000 }
+      );
+    } catch (err) {
+      toast.error(
+        () => (
+          <span className='flex gap-2'>Oops, we couldn’t send your Tweet</span>
+        ),
+        { duration: 6000 }
+      );
     }
-
-    if (closeModal) closeModal();
-
-    toast.success(
-      () => (
-        <span className='flex gap-2'>
-          Your Tweet was sent
-          <Link href={`/tweet/${tweetId}`}>
-            <a className='custom-underline font-bold'>View</a>
-          </Link>
-        </span>
-      ),
-      { duration: 6000 }
-    );
   };
 
   const handleImageUpload = (
@@ -207,7 +274,7 @@ export function Input({
       className={cn('flex flex-col', {
         '-mx-4': reply,
         'gap-2': replyModal,
-        'cursor-not-allowed': disabled
+        '': disabled
       })}
       onSubmit={handleSubmit}
     >
@@ -217,14 +284,15 @@ export function Input({
       {children}
       {reply && visited && (
         <motion.p
-          className='ml-[75px] -mb-2 mt-2 text-light-secondary dark:text-dark-secondary'
+          className='-mb-2 ml-[75px] mt-2 text-light-secondary dark:text-dark-secondary'
           {...fromTop}
         >
           Replying to{' '}
-          <Link href={`/user/${parent?.username as string}`}>
-            <a className='custom-underline text-main-accent'>
-              {parent?.username as string}
-            </a>
+          <Link
+            href={`/${parent?.username as string}`}
+            className='custom-underline text-main-accent'
+          >
+            {parent?.username as string}
           </Link>
         </motion.p>
       )}
@@ -232,7 +300,7 @@ export function Input({
         className={cn(
           'hover-animation grid w-full grid-cols-[auto,1fr] gap-3 px-4 py-3',
           reply
-            ? 'pt-3 pb-1'
+            ? 'pb-1 pt-3'
             : replyModal
             ? 'pt-0'
             : 'border-b-2 border-light-border dark:border-dark-border',

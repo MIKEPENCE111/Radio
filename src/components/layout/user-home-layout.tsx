@@ -22,7 +22,7 @@ export function UserHomeLayout({ children }: LayoutProps): JSX.Element {
   const { user: userData, loading } = useUser();
 
   const {
-    query: { id }
+    query: { username }
   } = useRouter();
 
   const coverData = userData?.coverPhotoURL
@@ -33,9 +33,9 @@ export function UserHomeLayout({ children }: LayoutProps): JSX.Element {
     ? { src: userData.photoURL, alt: userData.name }
     : null;
 
-  const { id: userId } = user ?? {};
+  const { username: userId } = user ?? {};
 
-  const isOwner = userData?.id === userId;
+  const isOwner = userData?.username === userId;
 
   return (
     <>
@@ -53,7 +53,7 @@ export function UserHomeLayout({ children }: LayoutProps): JSX.Element {
             <div className='flex flex-col gap-8'>
               <div className='relative flex flex-col gap-3 px-4 py-3'>
                 <UserHomeAvatar />
-                <p className='text-xl font-bold'>@{id}</p>
+                <p className='text-xl font-bold'>@{username}</p>
               </div>
               <div className='p-8 text-center'>
                 <p className='text-3xl font-bold'>This account doesn’t exist</p>
@@ -75,7 +75,7 @@ export function UserHomeLayout({ children }: LayoutProps): JSX.Element {
                   <div className='flex gap-2 self-start'>
                     <UserShare username={userData.username} />
                     <Button
-                      className='dark-bg-tab group relative cursor-not-allowed border border-light-line-reply p-2
+                      className='dark-bg-tab group relative  border border-light-line-reply p-2
                                  hover:bg-light-primary/10 active:bg-light-primary/20 dark:border-light-secondary 
                                  dark:hover:bg-dark-primary/10 dark:active:bg-dark-primary/20'
                     >

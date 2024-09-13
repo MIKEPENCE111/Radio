@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import cn from 'clsx';
+import { twemojiParse } from '@lib/twemoji';
 import { useAuth } from '@lib/context/auth-context';
 import { useModal } from '@lib/hooks/useModal';
 import { Modal } from '@components/modal/modal';
@@ -45,7 +46,7 @@ export function ViewTweet(tweet: ViewTweetProps): JSX.Element {
 
   const { open, openModal, closeModal } = useModal();
 
-  const tweetLink = `/tweet/${tweetId}`;
+  const tweetLink = `/${username}/${tweetId}`;
 
   const userId = user?.id as string;
 
@@ -117,16 +118,19 @@ export function ViewTweet(tweet: ViewTweetProps): JSX.Element {
       {reply && (
         <p className='text-light-secondary dark:text-dark-secondary'>
           Replying to{' '}
-          <Link href={`/user/${parentUsername}`}>
-            <a className='custom-underline text-main-accent'>
-              @{parentUsername}
-            </a>
+          <Link
+            href={`/${parentUsername}`}
+            className='custom-underline text-main-accent'
+          >
+            @{parentUsername}
           </Link>
         </p>
       )}
       <div>
         {text && (
-          <p className='whitespace-pre-line break-words text-2xl'>{text}</p>
+          <p className='whitespace-pre-line break-words text-2xl'>
+            {<span dangerouslySetInnerHTML={{ __html: twemojiParse(text) }} />}
+          </p>
         )}
         {images && (
           <ImagePreview

@@ -99,7 +99,7 @@ export function TweetActions({
       if (parentId) {
         const parentSnapshot = await getDoc(doc(tweetsCollection, parentId));
         if (parentSnapshot.exists()) {
-          await push(`/tweet/${parentId}`, undefined, { scroll: false });
+          await push(`/${username}/${parentId}`, undefined, { scroll: false });
           delayScroll(200)();
           await sleep(50);
         } else await push('/home');
@@ -122,7 +122,9 @@ export function TweetActions({
   const handlePin = async (): Promise<void> => {
     await managePinnedTweet(tweetIsPinned ? 'unpin' : 'pin', userId, tweetId);
     toast.success(
-      `Your tweet was ${tweetIsPinned ? 'unpinned' : 'pinned'} to your profile`
+      `Your Tweet was ${
+        tweetIsPinned ? 'unpinned from' : 'pinned to'
+      } your profile`
     );
     pinCloseModal();
   };
@@ -190,7 +192,7 @@ export function TweetActions({
             <Popover.Button
               as={Button}
               className={cn(
-                `main-tab group group absolute top-2 right-2 p-2 
+                `main-tab group group absolute right-2 top-2 p-2 
                  hover:bg-accent-blue/10 focus-visible:bg-accent-blue/10
                  focus-visible:!ring-accent-blue/80 active:bg-accent-blue/20`,
                 open && 'bg-accent-blue/10 [&>div>svg]:text-accent-blue'
@@ -208,7 +210,7 @@ export function TweetActions({
             <AnimatePresence>
               {open && (
                 <Popover.Panel
-                  className='menu-container group absolute top-[50px] right-2 whitespace-nowrap text-light-primary 
+                  className='menu-container group absolute right-2 top-[50px] whitespace-nowrap text-light-primary 
                              dark:text-dark-primary'
                   as={motion.div}
                   {...variants}
